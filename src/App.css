@@ -1,0 +1,235 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Bebas+Neue&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: #F5F0E8;
+  color: #1a1a1a;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+:root {
+  --black: #1a1a1a;
+  --white: #FDFAF4;
+  --yellow: #FFE600;
+  --pink: #FF6B9D;
+  --blue: #4169FF;
+  --green: #00C896;
+  --orange: #FF7A2F;
+  --red: #FF3B3B;
+  --bg: #F5F0E8;
+  --card-bg: #FDFAF4;
+  --border: 3px solid #1a1a1a;
+  --shadow: 4px 4px 0px #1a1a1a;
+  --shadow-sm: 2px 2px 0px #1a1a1a;
+}
+
+.nb-card {
+  background: var(--card-bg);
+  border: var(--border);
+  box-shadow: var(--shadow);
+  border-radius: 4px;
+  padding: 0.9rem;
+}
+
+.nb-btn {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  border: var(--border);
+  box-shadow: var(--shadow-sm);
+  border-radius: 4px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  background: var(--yellow);
+  color: var(--black);
+  transition: transform 0.1s, box-shadow 0.1s;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.nb-btn:active { transform: translate(2px,2px); box-shadow: 0 0 0 #1a1a1a; }
+.nb-btn.blue  { background: var(--blue);  color: #fff; }
+.nb-btn.green { background: var(--green); color: #fff; }
+.nb-btn.red   { background: var(--red);   color: #fff; }
+.nb-btn.white { background: var(--white); }
+.nb-btn.sm    { font-size: 0.7rem; padding: 0.3rem 0.65rem; min-height: 34px; box-shadow: 2px 2px 0 #1a1a1a; }
+
+/* font-size 16px prevents iOS auto-zoom on focus */
+.nb-input {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px;
+  border: var(--border);
+  border-radius: 4px;
+  padding: 0.55rem 0.75rem;
+  background: var(--white);
+  color: var(--black);
+  width: 100%;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.nb-input:focus { box-shadow: 0 0 0 3px var(--yellow); }
+
+.nb-select {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px;
+  border: var(--border);
+  border-radius: 4px;
+  padding: 0.55rem 2rem 0.55rem 0.75rem;
+  background: var(--white);
+  color: var(--black);
+  outline: none;
+  cursor: pointer;
+  font-weight: 600;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%231a1a1a' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  width: 100%;
+}
+
+.progress-outer {
+  border: 2px solid var(--black);
+  border-radius: 2px;
+  background: #e0ddd5;
+  height: 12px;
+  overflow: hidden;
+}
+.progress-inner {
+  height: 100%;
+  transition: width 0.4s;
+  border-right: 2px solid var(--black);
+}
+
+/* Bottom nav */
+.nav-tab {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  padding: 0.38rem 0.15rem;
+  cursor: pointer;
+  background: transparent;
+  color: #666;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: all 0.1s;
+  flex: 1;
+  min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.nav-icon { font-size: 1.2rem; line-height: 1; }
+.nav-tab.active { background: var(--yellow); border: 2px solid var(--black); box-shadow: 2px 2px 0 var(--black); color: var(--black); }
+
+/* Modal slides up from bottom on mobile */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 200;
+}
+.modal-box {
+  background: var(--card-bg);
+  border: var(--border);
+  border-bottom: none;
+  box-shadow: 0 -5px 0 var(--black);
+  border-radius: 10px 10px 0 0;
+  padding: 1rem 1rem 2.5rem;
+  width: 100%;
+  max-width: 480px;
+  max-height: 92vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.modal-handle {
+  width: 36px; height: 4px;
+  background: #ccc; border-radius: 2px;
+  margin: 0 auto 1rem;
+}
+.modal-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.4rem;
+  border-bottom: 3px solid var(--black);
+  padding-bottom: 6px;
+  margin-bottom: 1rem;
+}
+
+/* Calculator */
+.calc-btn {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  border: 2px solid var(--black);
+  border-radius: 4px;
+  height: 62px;
+  cursor: pointer;
+  background: var(--white);
+  color: var(--black);
+  box-shadow: 3px 3px 0 var(--black);
+  transition: transform 0.07s, box-shadow 0.07s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.calc-btn:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--black); }
+.calc-btn.op  { background: var(--blue);  color: #fff; }
+.calc-btn.eq  { background: var(--green); color: #fff; }
+.calc-btn.del { background: var(--red);   color: #fff; }
+
+.section-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.45rem;
+  letter-spacing: 0.04em;
+  border-bottom: 3px solid var(--black);
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+label {
+  font-size: 0.72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  display: block; margin-bottom: 5px;
+}
+
+/* 2-col on mobile, 4-col on wider */
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+.stat-card {
+  background: var(--card-bg);
+  border: var(--border);
+  box-shadow: var(--shadow);
+  border-radius: 4px;
+  padding: 0.7rem;
+}
+.stat-lbl { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #666; margin-bottom: 2px; }
+.stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; line-height: 1.1; }
+
+@media (min-width: 480px) {
+  .stat-grid { grid-template-columns: repeat(4,1fr); }
+  .nb-card { padding: 1.1rem; }
+  .calc-btn { height: 70px; font-size: 1.25rem; }
+  .nav-tab { font-size: 0.65rem; padding: 0.42rem 0.25rem; }
+  .nav-icon { font-size: 1.3rem; }
+}
+
+button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
