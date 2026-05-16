@@ -34,7 +34,7 @@ export default function App() {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Header */}
       <header style={{ background: "var(--black)", borderBottom: "3px solid var(--yellow)", padding: "0.55rem 0.9rem", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
         <div>

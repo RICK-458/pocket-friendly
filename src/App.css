@@ -5,7 +5,9 @@ html { -webkit-text-size-adjust: 100%; }
 
 body {
   font-family: 'Space Grotesk', sans-serif;
-  background: #F5F0E8;
+  background-color: #F5F0E8;
+  background-image: radial-gradient(rgba(26,26,26,0.1) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
   color: #1a1a1a;
   min-height: 100vh;
   overflow-x: hidden;
