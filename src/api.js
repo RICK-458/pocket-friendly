@@ -6,13 +6,30 @@
 
 const BASE = import.meta.env.VITE_API_URL || "/api";
 
+// ─── AUTH TOKEN ──────────────────────────────────────────────────────────────
+const TOKEN_KEY = "pf_token";
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
+export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
 async function request(path, options = {}) {
+  const token = getToken();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...options,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
   const json = await res.json().catch(() => ({}));
+
+  // Expired/invalid session on a protected route → force re-login
+  if (res.status === 401 && !path.startsWith("/auth")) {
+    clearToken();
+    window.dispatchEvent(new Event("pf:logout"));
+  }
+
   if (!res.ok || json.success === false) {
     const detail = json.errors?.length ? ` — ${json.errors.map(e => e.message).join(", ")}` : "";
     throw new Error((json.message || `Request failed (${res.status})`) + detail);
@@ -91,6 +108,23 @@ const fromTx = (r) => ({
 // ─── API SURFACE ─────────────────────────────────────────────────────────────
 
 export const api = {
+  // Auth
+  register: async (d) => {
+    const r = await request("/auth/register", { method: "POST", body: d });
+    setToken(r.token);
+    return r.user;
+  },
+  login: async (d) => {
+    const r = await request("/auth/login", { method: "POST", body: d });
+    setToken(r.token);
+    return r.user;
+  },
+  me: () => request("/auth/me"),
+  logout: async () => {
+    try { await request("/auth/logout", { method: "POST" }); } catch { /* stateless */ }
+    clearToken();
+  },
+
   // Expenses
   listExpenses: async (params) => {
     const d = await request(`/expenses${qs(params)}`);

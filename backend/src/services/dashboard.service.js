@@ -2,7 +2,7 @@ import { query } from '../config/db.js';
 import { todayStr, weekStart, monthStartStr } from '../utils/dates.js';
 import { getLimits, getSavings } from './settings.service.js';
 
-export async function getSummary() {
+export async function getSummary(userId) {
   const today = todayStr();
   const week = weekStart();
   const monthStart = monthStartStr();
@@ -16,24 +16,29 @@ export async function getSummary() {
          COALESCE(SUM(amount) FILTER (WHERE expense_date >= $3), 0)::float  AS monthly_expenses,
          COALESCE(AVG(amount), 0)::float                                    AS average_expense,
          COUNT(*)::int                                                      AS expense_count
-       FROM expenses`,
-      [today, week, monthStart]
+       FROM expenses
+       WHERE user_id = $4`,
+      [today, week, monthStart, userId]
     ),
     query(
       `SELECT category, SUM(amount)::float AS total
        FROM expenses
-       WHERE expense_date >= $1
+       WHERE expense_date >= $1 AND user_id = $2
        GROUP BY category
        ORDER BY total DESC`,
-      [monthStart]
+      [monthStart, userId]
     ),
-    query('SELECT * FROM expenses ORDER BY expense_date DESC, id DESC LIMIT 5'),
     query(
-      `SELECT COUNT(*)::int AS count FROM reminders WHERE paid = FALSE AND due_date = $1`,
-      [today]
+      'SELECT * FROM expenses WHERE user_id = $1 ORDER BY expense_date DESC, id DESC LIMIT 5',
+      [userId]
     ),
-    getLimits(),
-    getSavings(),
+    query(
+      `SELECT COUNT(*)::int AS count FROM reminders
+       WHERE paid = FALSE AND due_date = $1 AND user_id = $2`,
+      [today, userId]
+    ),
+    getLimits(userId),
+    getSavings(userId),
   ]);
 
   const t = totals.rows[0];
@@ -52,7 +57,7 @@ export async function getSummary() {
   };
 }
 
-export async function getCharts() {
+export async function getCharts(userId) {
   const today = todayStr();
   const monthStart = monthStartStr();
 
@@ -61,10 +66,10 @@ export async function getCharts() {
     query(
       `SELECT d::date::text AS date, COALESCE(SUM(e.amount), 0)::float AS total
        FROM generate_series($1::date - 6, $1::date, '1 day') AS d
-       LEFT JOIN expenses e ON e.expense_date = d::date
+       LEFT JOIN expenses e ON e.expense_date = d::date AND e.user_id = $2
        GROUP BY d
        ORDER BY d`,
-      [today]
+      [today, userId]
     ),
     // Spending per month for the last 6 months (zero-filled)
     query(
@@ -74,10 +79,10 @@ export async function getCharts() {
          date_trunc('month', $1::date),
          '1 month'
        ) AS m
-       LEFT JOIN expenses e ON date_trunc('month', e.expense_date) = m
+       LEFT JOIN expenses e ON date_trunc('month', e.expense_date) = m AND e.user_id = $2
        GROUP BY m
        ORDER BY m`,
-      [today]
+      [today, userId]
     ),
     // Current-month category distribution with percentage share
     query(
@@ -85,10 +90,10 @@ export async function getCharts() {
               SUM(amount)::float AS total,
               ROUND(100.0 * SUM(amount) / NULLIF(SUM(SUM(amount)) OVER (), 0), 1)::float AS percentage
        FROM expenses
-       WHERE expense_date >= $1
+       WHERE expense_date >= $1 AND user_id = $2
        GROUP BY category
        ORDER BY total DESC`,
-      [monthStart]
+      [monthStart, userId]
     ),
   ]);
 

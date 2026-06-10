@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import "./App.css";
+import { api, getToken, clearToken } from "./api";
+import AuthPage from "./components/auth/AuthPage";
 import Dashboard from "./components/dashboard/Dashboard";
 import Expenses from "./components/expenses/Expenses";
 import Reminders from "./components/reminders/Reminders";
@@ -15,8 +17,32 @@ export default function App() {
     }
   }, []);
 
+  const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [paymentAmount, setPaymentAmount] = useState("");
+
+  // Restore session on startup; react to forced logout (expired token)
+  useEffect(() => {
+    const onForcedLogout = () => setUser(null);
+    window.addEventListener("pf:logout", onForcedLogout);
+
+    if (getToken()) {
+      api.me()
+        .then(setUser)
+        .catch(() => clearToken())
+        .finally(() => setAuthChecked(true));
+    } else {
+      setAuthChecked(true);
+    }
+    return () => window.removeEventListener("pf:logout", onForcedLogout);
+  }, []);
+
+  async function handleLogout() {
+    await api.logout();
+    setUser(null);
+    setTab("dashboard");
+  }
 
   function handlePayFromCalc(amount) {
     setPaymentAmount(amount);
@@ -30,6 +56,16 @@ export default function App() {
     { id: "payment", label: "Pay", icon: "/pay.png" },
   ];
 
+  if (!authChecked) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <img src="/logo.png" alt="Loading" style={{ height: 60 }} />
+      </div>
+    );
+  }
+
+  if (!user) return <AuthPage onAuth={setUser} />;
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Header */}
@@ -38,7 +74,13 @@ export default function App() {
           <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: "1.45rem", color: "var(--yellow)", letterSpacing: "0.06em" }}>POCKET</span>
           <span style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: "1.45rem", color: "var(--white)", letterSpacing: "0.06em" }}>-FRIENDLY</span>
         </div>
-        <img src="/logo.png" alt="Pocket-Friendly logo" style={{ height: 30, width: "auto", display: "block" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <span style={{ color: "#aaa", fontSize: "0.62rem", fontWeight: 700, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</span>
+          <button onClick={handleLogout} title="Log out" style={{ background: "var(--yellow)", border: "2px solid var(--black)", borderRadius: 3, padding: "2px 8px", fontSize: "0.6rem", fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em" }}>
+            LOGOUT
+          </button>
+          <img src="/logo.png" alt="Pocket-Friendly logo" style={{ height: 30, width: "auto", display: "block" }} />
+        </div>
       </header>
 
       {/* Content */}

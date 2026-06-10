@@ -4,22 +4,22 @@ import { ok, created } from '../utils/response.js';
 import * as paymentService from '../services/payment.service.js';
 
 export const createOrder = asyncHandler(async (req, res) => {
-  const result = await paymentService.createOrder(req.body);
+  const result = await paymentService.createOrder(req.user.id, req.body);
   created(res, result, 'Order created');
 });
 
 export const verifyPayment = asyncHandler(async (req, res) => {
-  const payment = await paymentService.verifyAndFinalize(req.body);
+  const payment = await paymentService.verifyAndFinalize(req.user.id, req.body);
   ok(res, payment, 'Payment verified');
 });
 
 export const markFailed = asyncHandler(async (req, res) => {
-  const payment = await paymentService.markFailed(req.body.razorpay_order_id, req.body.reason);
+  const payment = await paymentService.markFailed(req.user.id, req.body.razorpay_order_id, req.body.reason);
   ok(res, payment, 'Payment marked as failed');
 });
 
 export const getHistory = asyncHandler(async (req, res) => {
-  const payments = await paymentService.listPayments({
+  const payments = await paymentService.listPayments(req.user.id, {
     limit: req.query.limit || 50,
     status: req.query.status,
   });
@@ -27,7 +27,7 @@ export const getHistory = asyncHandler(async (req, res) => {
 });
 
 export const getPayment = asyncHandler(async (req, res) => {
-  const payment = await paymentService.getPaymentById(req.params.id);
+  const payment = await paymentService.getPaymentById(req.user.id, req.params.id);
   if (!payment) throw ApiError.notFound('Payment not found');
   ok(res, payment, 'Payment fetched');
 });

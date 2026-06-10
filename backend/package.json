@@ -11,11 +11,13 @@
     "db:seed": "psql -U postgres -d pocket_friendly -f database/seed.sql"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
     "express-validator": "^7.2.1",
     "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0",
     "pg": "^8.16.0",
     "razorpay": "^2.9.6"

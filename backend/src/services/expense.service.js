@@ -8,7 +8,8 @@ const SORTABLE = {
   category: 'category',
 };
 
-export async function listExpenses({
+// Every query is scoped to the authenticated user — userId is never optional.
+export async function listExpenses(userId, {
   page = 1,
   limit = 20,
   search,
@@ -18,8 +19,8 @@ export async function listExpenses({
   sortBy = 'expense_date',
   order = 'desc',
 } = {}) {
-  const where = [];
-  const params = [];
+  const where = ['user_id = $1'];
+  const params = [userId];
 
   if (search) {
     params.push(`%${search}%`);
@@ -38,7 +39,7 @@ export async function listExpenses({
     where.push(`expense_date <= $${params.length}`);
   }
 
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const whereSql = `WHERE ${where.join(' AND ')}`;
   const sortCol = SORTABLE[sortBy] || 'expense_date';
   const dir = String(order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
@@ -62,42 +63,45 @@ export async function listExpenses({
   };
 }
 
-export async function getExpenseById(id) {
-  const { rows } = await query('SELECT * FROM expenses WHERE id = $1', [id]);
+export async function getExpenseById(userId, id) {
+  const { rows } = await query('SELECT * FROM expenses WHERE id = $1 AND user_id = $2', [id, userId]);
   return rows[0] || null;
 }
 
-export async function createExpense({ title, amount, category, expense_date, notes }) {
+export async function createExpense(userId, { title, amount, category, expense_date, notes }) {
   const { rows } = await query(
-    `INSERT INTO expenses (title, amount, category, expense_date, notes)
-     VALUES ($1, $2, $3, COALESCE($4, CURRENT_DATE), $5)
+    `INSERT INTO expenses (user_id, title, amount, category, expense_date, notes)
+     VALUES ($1, $2, $3, $4, COALESCE($5, CURRENT_DATE), $6)
      RETURNING *`,
-    [title, amount, category, expense_date || null, notes || null]
+    [userId, title, amount, category, expense_date || null, notes || null]
   );
   return rows[0];
 }
 
-export async function updateExpense(id, { title, amount, category, expense_date, notes }) {
+export async function updateExpense(userId, id, { title, amount, category, expense_date, notes }) {
   const { rows } = await query(
     `UPDATE expenses SET
-       title        = COALESCE($2, title),
-       amount       = COALESCE($3, amount),
-       category     = COALESCE($4, category),
-       expense_date = COALESCE($5, expense_date),
-       notes        = COALESCE($6, notes)
-     WHERE id = $1
+       title        = COALESCE($3, title),
+       amount       = COALESCE($4, amount),
+       category     = COALESCE($5, category),
+       expense_date = COALESCE($6, expense_date),
+       notes        = COALESCE($7, notes)
+     WHERE id = $1 AND user_id = $2
      RETURNING *`,
-    [id, title ?? null, amount ?? null, category ?? null, expense_date ?? null, notes ?? null]
+    [id, userId, title ?? null, amount ?? null, category ?? null, expense_date ?? null, notes ?? null]
   );
   return rows[0] || null;
 }
 
-export async function deleteExpense(id) {
-  const { rowCount } = await query('DELETE FROM expenses WHERE id = $1', [id]);
+export async function deleteExpense(userId, id) {
+  const { rowCount } = await query('DELETE FROM expenses WHERE id = $1 AND user_id = $2', [id, userId]);
   return rowCount > 0;
 }
 
-export async function bulkDeleteExpenses(ids) {
-  const { rowCount } = await query('DELETE FROM expenses WHERE id = ANY($1::int[])', [ids]);
+export async function bulkDeleteExpenses(userId, ids) {
+  const { rowCount } = await query(
+    'DELETE FROM expenses WHERE id = ANY($1::int[]) AND user_id = $2',
+    [ids, userId]
+  );
   return rowCount;
 }

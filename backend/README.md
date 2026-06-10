@@ -77,6 +77,23 @@ Every endpoint returns the same envelope:
 |---|---|---|
 | GET | `/api/health` | Liveness check |
 
+### Auth (public)
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/auth/register` | `{ name, email, password }` → `{ user, token }` (password bcrypt-hashed, email unique) |
+| POST | `/api/auth/login` | `{ email, password }` → `{ user, token }` |
+| POST | `/api/auth/logout` | Stateless acknowledgement — client discards the token |
+| GET | `/api/auth/me` | Current user (requires `Authorization: Bearer <token>`) |
+
+**All other endpoints require `Authorization: Bearer <JWT>`** and are automatically
+scoped to the authenticated user — every query filters by `user_id`, so users can
+never read, modify, or delete another user's records (cross-user IDs return 404).
+
+Tokens are signed with `JWT_SECRET` (env) and expire after `JWT_EXPIRES_IN` (default 7d).
+
+**Test users** (seeded, password `password123`): `test1@example.com` (owns the original
+data), `test2@example.com` (own sample set — use both to verify isolation).
+
 ### Expenses
 | Method | Path | Description |
 |---|---|---|
