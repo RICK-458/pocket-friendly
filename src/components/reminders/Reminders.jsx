@@ -35,10 +35,10 @@ export default function Reminders() {
 
   // Status (overdue / due_today / upcoming / paid) is computed by the backend
   const groups = [
-    { title: "🚨 Overdue", items: reminders.filter(r => r.status === "overdue"), accent: "var(--red)" },
-    { title: "🔔 Due Today", items: reminders.filter(r => r.status === "due_today"), accent: "var(--orange)" },
-    { title: "📅 Upcoming", items: reminders.filter(r => r.status === "upcoming"), accent: "var(--blue)" },
-    { title: "✅ Paid (auto-renewing)", items: reminders.filter(r => r.status === "paid"), accent: "var(--green)" },
+    { title: "Overdue", items: reminders.filter(r => r.status === "overdue"), accent: "var(--red)" },
+    { title: "Due Today", items: reminders.filter(r => r.status === "due_today"), accent: "var(--orange)" },
+    { title: "Upcoming", items: reminders.filter(r => r.status === "upcoming"), accent: "var(--blue)" },
+    { title: "Paid (auto-renewing)", items: reminders.filter(r => r.status === "paid"), accent: "var(--green)" },
   ];
 
   return (

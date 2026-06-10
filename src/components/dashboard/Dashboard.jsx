@@ -29,7 +29,6 @@ export default function Dashboard() {
 
       {billsDueToday > 0 && (
         <div style={{ background: "var(--red)", border: "var(--border)", borderRadius: 4, padding: "0.6rem 0.85rem", marginBottom: "0.85rem", display: "flex", gap: 8, alignItems: "center", boxShadow: "var(--shadow-sm)" }}>
-          <span>🔔</span>
           <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.82rem" }}>{billsDueToday} bill{billsDueToday > 1 ? "s" : ""} due TODAY!</span>
         </div>
       )}

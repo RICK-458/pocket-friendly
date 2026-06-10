@@ -110,19 +110,12 @@ export default function Payment({ initialAmount = "" }) {
       <div style={{ background: "var(--yellow)", border: "var(--border)", borderRadius: 4, padding: "0.55rem 0.85rem", marginBottom: "0.85rem", fontSize: "0.76rem", fontWeight: 700, boxShadow: "var(--shadow-sm)" }}>
         Calculate in Calc tab, then pay here!
       </div>
-      <div className="nb-card" style={{ marginBottom: "0.85rem", display: "flex", gap: 9, alignItems: "center", padding: "0.6rem 0.85rem" }}>
-        <span style={{ fontSize: "1.2rem" }}>🛡</span>
-        <div style={{ fontSize: "0.74rem", fontWeight: 600, lineHeight: 1.35 }}>
-          Pay securely via <b>Razorpay</b> — UPI / QR · Cards · NetBanking · Wallets
-          <div style={{ fontSize: "0.62rem", color: "#888", fontWeight: 400 }}>Pick your payment method in the Razorpay window (Test Mode)</div>
-        </div>
-      </div>
       <div className="nb-card">
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <div><label>Amount (₹) *</label><input className="nb-input" type="number" inputMode="decimal" placeholder="Enter amount" value={amount} onChange={e => setAmount(e.target.value)} /></div>
           <div><label>Pay To (optional)</label><input className="nb-input" type="text" placeholder="Who are you paying?" value={name} onChange={e => setName(e.target.value)} /></div>
           <div><label>Note (optional)</label><input className="nb-input" type="text" placeholder="What's this for?" value={note} onChange={e => setNote(e.target.value)} /></div>
-          <button className="nb-btn blue" style={{ width: "100%", fontSize: "1rem", padding: "0.85rem", marginTop: 4 }} onClick={handlePay}>🔒 Proceed to Pay</button>
+          <button className="nb-btn blue" style={{ width: "100%", fontSize: "1rem", padding: "0.85rem", marginTop: 4 }} onClick={handlePay}>Proceed to Pay</button>
         </div>
       </div>
       <TxList txHistory={txHistory} />
