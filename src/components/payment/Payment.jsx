@@ -23,8 +23,7 @@ export default function Payment({ initialAmount = "" }) {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) return;
     setStep("confirm");
   }
-  // Opens Razorpay Checkout (test mode). Payment details (card / UPI / bank)
-  // are collected inside Razorpay's secure window — they never touch this app.
+  
   async function confirmPay() {
     if (paying) return;
     setPaying(true);
