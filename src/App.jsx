@@ -1,17 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import "./App.css";
+import { api, loadRazorpayCheckout } from "./api";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-function load(key, fb) { try { return JSON.parse(localStorage.getItem(key)) ?? fb; } catch { return fb; } }
-function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch { } }
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); return d.toISOString().slice(0, 10); };
-const monthStr = () => new Date().toISOString().slice(0, 7);
 const CATS = ["Food", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Savings", "Other"];
 const COLORS = { Food: "#FFE600", Transport: "#4169FF", Shopping: "#FF6B9D", Bills: "#FF7A2F", Health: "#00C896", Entertainment: "#FF3B3B", Savings: "#9B59FF", Other: "#888" };
 const barCol = p => p >= 90 ? "#FF3B3B" : p >= 70 ? "#FF7A2F" : "#00C896";
 const pct = (v, m) => Math.min(100, Math.round((v / (m || 1)) * 100));
+
+function Loading() {
+  return <div className="nb-card" style={{ textAlign: "center", color: "#888", fontSize: "0.82rem", padding: "2rem 1rem" }}>Loading…</div>;
+}
+
+function ErrorCard({ msg }) {
+  return (
+    <div className="nb-card" style={{ borderLeft: "5px solid var(--red)", padding: "0.8rem" }}>
+      <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--red)" }}>⚠ Couldn't reach the server</div>
+      <div style={{ fontSize: "0.72rem", color: "#666", marginTop: 4 }}>{msg}</div>
+      <div style={{ fontSize: "0.68rem", color: "#888", marginTop: 6 }}>Is the backend running? Start it with <code>npm run dev</code> inside the backend folder.</div>
+    </div>
+  );
+}
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +36,12 @@ export default function App() {
   }, []);
 
   const [tab, setTab] = useState("dashboard");
+  const [paymentAmount, setPaymentAmount] = useState("");
+
+  function handlePayFromCalc(amount) {
+    setPaymentAmount(amount);
+    setTab("payment");
+  }
   const TABS = [
     { id: "dashboard", label: "Home", icon: "/home.png" },
     { id: "expenses", label: "Spend", icon: "/spend.png" },
@@ -49,8 +66,8 @@ export default function App() {
         {tab === "dashboard" && <Dashboard />}
         {tab === "expenses" && <Expenses />}
         {tab === "reminders" && <Reminders />}
-        {tab === "calculator" && <Calculator />}
-        {tab === "payment" && <Payment />}
+        {tab === "calculator" && <Calculator onPayFromCalc={handlePayFromCalc} />}
+        {tab === "payment" && <Payment initialAmount={paymentAmount} />}
       </main>
 
       {/* Bottom nav */}
@@ -76,45 +93,42 @@ export default function App() {
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 
 function Dashboard() {
-  const expenses = load("pf_expenses", []);
-  const limits = load("pf_limits", { daily: 500, weekly: 3000, monthly: 12000 });
-  const savings = load("pf_savings", 0);
-  const reminders = load("pf_reminders", []);
+  const [summary, setSummary] = useState(null);
+  const [charts, setCharts] = useState(null);
+  const [error, setError] = useState("");
 
-  const today = todayStr(), ws = weekStart(), mo = monthStr();
-  const todayAmt = expenses.filter(e => e.date === today).reduce((s, e) => s + e.amount, 0);
-  const weekAmt = expenses.filter(e => e.date >= ws).reduce((s, e) => s + e.amount, 0);
-  const moAmt = expenses.filter(e => e.date.startsWith(mo)).reduce((s, e) => s + e.amount, 0);
-  const dueToday = reminders.filter(r => !r.paid && r.dueDate === today).length;
+  useEffect(() => {
+    Promise.all([api.getDashboardSummary(), api.getDashboardCharts()])
+      .then(([s, c]) => { setSummary(s); setCharts(c); })
+      .catch(e => setError(e.message));
+  }, []);
 
-  const catTotals = {};
-  expenses.filter(e => e.date.startsWith(mo)).forEach(e => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
+  if (error) return <div><div className="section-title">Dashboard</div><ErrorCard msg={error} /></div>;
+  if (!summary || !charts) return <div><div className="section-title">Dashboard</div><Loading /></div>;
 
-  const last7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i));
-    const ds = d.toISOString().slice(0, 10);
-    return { label: d.toLocaleDateString("en", { weekday: "narrow" }), ds, amt: expenses.filter(e => e.date === ds).reduce((s, e) => s + e.amount, 0) };
-  });
-  const maxAmt = Math.max(...last7.map(d => d.amt), 1);
+  const today = todayStr();
+  const { todayExpenses, weekExpenses, monthlyExpenses, savings, limits, billsDueToday, categoryBreakdown, recentTransactions } = summary;
+  const last7 = charts.dailyTrend;
+  const maxAmt = Math.max(...last7.map(d => d.total), 1);
 
   return (
     <div>
       <div className="section-title">Dashboard</div>
 
-      {dueToday > 0 && (
+      {billsDueToday > 0 && (
         <div style={{ background: "var(--red)", border: "var(--border)", borderRadius: 4, padding: "0.6rem 0.85rem", marginBottom: "0.85rem", display: "flex", gap: 8, alignItems: "center", boxShadow: "var(--shadow-sm)" }}>
           <span>🔔</span>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.82rem" }}>{dueToday} bill{dueToday > 1 ? "s" : ""} due TODAY!</span>
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.82rem" }}>{billsDueToday} bill{billsDueToday > 1 ? "s" : ""} due TODAY!</span>
         </div>
       )}
 
       {/* Stat grid */}
       <div className="stat-grid">
         {[
-          { label: "Today", val: todayAmt, limit: limits.daily },
-          { label: "This Week", val: weekAmt, limit: limits.weekly },
-          { label: "This Month", val: moAmt, limit: limits.monthly },
-          { label: "Savings", val: savings, limit: null },
+          { label: "Today", val: todayExpenses, limit: limits.daily },
+          { label: "This Week", val: weekExpenses, limit: limits.weekly },
+          { label: "This Month", val: monthlyExpenses, limit: limits.monthly },
+          { label: "Savings", val: savings.total, limit: null },
         ].map(s => {
           const p = s.limit ? pct(s.val, s.limit) : null;
           return (
@@ -137,15 +151,16 @@ function Dashboard() {
         <div style={{ fontWeight: 700, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.6rem" }}>📈 Last 7 Days</div>
         <div style={{ display: "flex", gap: "4px", alignItems: "flex-end", height: 90 }}>
           {last7.map((d, i) => {
-            const isToday = d.ds === today;
-            const bh = Math.max(4, (d.amt / maxAmt) * 72);
+            const isToday = d.date === today;
+            const bh = Math.max(4, (d.total / maxAmt) * 72);
+            const label = new Date(d.date).toLocaleDateString("en", { weekday: "narrow" });
             return (
               <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                {d.amt > 0 && <div style={{ fontSize: "0.5rem", fontWeight: 700, color: "#555", textAlign: "center", lineHeight: 1 }}>{d.amt >= 1000 ? (d.amt / 1000).toFixed(1) + "k" : d.amt}</div>}
+                {d.total > 0 && <div style={{ fontSize: "0.5rem", fontWeight: 700, color: "#555", textAlign: "center", lineHeight: 1 }}>{d.total >= 1000 ? (d.total / 1000).toFixed(1) + "k" : d.total}</div>}
                 <div style={{ flex: 1, display: "flex", alignItems: "flex-end", width: "100%" }}>
                   <div style={{ width: "100%", height: bh, background: isToday ? "var(--yellow)" : "var(--blue)", border: "2px solid var(--black)", borderRadius: "2px 2px 0 0" }} />
                 </div>
-                <div style={{ fontSize: "0.58rem", fontWeight: 700, color: isToday ? "var(--black)" : "#777" }}>{d.label}</div>
+                <div style={{ fontSize: "0.58rem", fontWeight: 700, color: isToday ? "var(--black)" : "#777" }}>{label}</div>
               </div>
             );
           })}
@@ -153,15 +168,15 @@ function Dashboard() {
       </div>
 
       {/* Category breakdown */}
-      {Object.keys(catTotals).length > 0 && (
+      {categoryBreakdown.length > 0 && (
         <div className="nb-card" style={{ marginBottom: "0.85rem" }}>
           <div style={{ fontWeight: 700, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.6rem" }}>🗂 This Month</div>
-          {Object.entries(catTotals).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => (
-            <div key={cat} style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
-              <div style={{ width: 8, height: 8, background: COLORS[cat] || "#888", border: "2px solid var(--black)", borderRadius: 2, flexShrink: 0 }} />
-              <div style={{ fontSize: "0.72rem", fontWeight: 600, width: 72, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</div>
-              <div className="progress-outer" style={{ flex: 1 }}><div className="progress-inner" style={{ width: pct(amt, moAmt) + "%", background: COLORS[cat] || "#888" }} /></div>
-              <div style={{ fontSize: "0.72rem", fontWeight: 700, minWidth: 50, textAlign: "right" }}>₹{amt.toLocaleString()}</div>
+          {categoryBreakdown.map(({ category, total }) => (
+            <div key={category} style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+              <div style={{ width: 8, height: 8, background: COLORS[category] || "#888", border: "2px solid var(--black)", borderRadius: 2, flexShrink: 0 }} />
+              <div style={{ fontSize: "0.72rem", fontWeight: 600, width: 72, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{category}</div>
+              <div className="progress-outer" style={{ flex: 1 }}><div className="progress-inner" style={{ width: pct(total, monthlyExpenses) + "%", background: COLORS[category] || "#888" }} /></div>
+              <div style={{ fontSize: "0.72rem", fontWeight: 700, minWidth: 50, textAlign: "right" }}>₹{total.toLocaleString()}</div>
             </div>
           ))}
         </div>
@@ -170,13 +185,13 @@ function Dashboard() {
       {/* Recent */}
       <div className="nb-card">
         <div style={{ fontWeight: 700, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.6rem" }}>🧾 Recent</div>
-        {expenses.length === 0 && <div style={{ color: "#888", fontSize: "0.82rem" }}>No expenses yet — add some in Spend tab!</div>}
-        {expenses.slice(-5).reverse().map(e => (
+        {recentTransactions.length === 0 && <div style={{ color: "#888", fontSize: "0.82rem" }}>No expenses yet — add some in Spend tab!</div>}
+        {recentTransactions.map(e => (
           <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1.5px solid #e0ddd5", padding: "6px 0", gap: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
               <div style={{ width: 8, height: 8, background: COLORS[e.category] || "#888", border: "2px solid var(--black)", borderRadius: 2, flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.note || e.category}</div>
+                <div style={{ fontWeight: 600, fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.note || e.title || e.category}</div>
                 <div style={{ fontSize: "0.62rem", color: "#888" }}>{e.date}</div>
               </div>
             </div>
@@ -191,32 +206,50 @@ function Dashboard() {
 // ─── EXPENSES ────────────────────────────────────────────────────────────────
 
 function Expenses() {
-  const [expenses, setExpenses] = useState(() => load("pf_expenses", []));
-  const [limits, setLimits] = useState(() => load("pf_limits", { daily: 500, weekly: 3000, monthly: 12000 }));
-  const [savings, setSavings] = useState(() => load("pf_savings", 0));
+  const [expenses, setExpenses] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [filterCat, setFilterCat] = useState("All");
   const [savAmt, setSavAmt] = useState("");
   const [form, setForm] = useState({ amount: "", category: "Food", note: "", date: todayStr() });
 
-  function addExpense() {
+  const refresh = useCallback(async () => {
+    const [s, list] = await Promise.all([
+      api.getDashboardSummary(),
+      api.listExpenses({ category: filterCat === "All" ? undefined : filterCat, limit: 500, sortBy: "expense_date", order: "desc" }),
+    ]);
+    setSummary(s); setExpenses(list.items); setError("");
+  }, [filterCat]);
+
+  useEffect(() => { refresh().catch(e => setError(e.message)); }, [refresh]);
+
+  async function addExpense() {
     if (!form.amount || isNaN(Number(form.amount))) return;
-    const updated = [...expenses, { id: Date.now(), amount: Number(form.amount), category: form.category, note: form.note, date: form.date }];
-    setExpenses(updated); save("pf_expenses", updated);
-    setForm({ amount: "", category: "Food", note: "", date: todayStr() }); setShowAdd(false);
+    try {
+      await api.createExpense({ amount: Number(form.amount), category: form.category, note: form.note, date: form.date });
+      setForm({ amount: "", category: "Food", note: "", date: todayStr() }); setShowAdd(false);
+      await refresh();
+    } catch (e) { alert(e.message); }
   }
-  function delExpense(id) { const u = expenses.filter(e => e.id !== id); setExpenses(u); save("pf_expenses", u); }
-  function saveLimits(nl) { setLimits(nl); save("pf_limits", nl); setShowLimits(false); }
-  function addSavings() {
-    if (!savAmt) return;
-    const u = Number(savings) + Number(savAmt); setSavings(u); save("pf_savings", u); setSavAmt("");
+  async function delExpense(id) {
+    try { await api.deleteExpense(id); await refresh(); } catch (e) { alert(e.message); }
+  }
+  async function saveLimits(nl) {
+    try { await api.updateLimits(nl); setShowLimits(false); await refresh(); } catch (e) { alert(e.message); }
+  }
+  async function addSavings() {
+    if (!savAmt || Number(savAmt) <= 0) return;
+    try { await api.addSavings(Number(savAmt)); setSavAmt(""); await refresh(); } catch (e) { alert(e.message); }
   }
 
-  const mo = monthStr();
-  const moAmt = expenses.filter(e => e.date.startsWith(mo)).reduce((s, e) => s + e.amount, 0);
-  const p = pct(moAmt, limits.monthly);
-  const sorted = [...(filterCat === "All" ? expenses : expenses.filter(e => e.category === filterCat))].sort((a, b) => b.date.localeCompare(a.date));
+  if (error) return <div><div className="section-title">Expenses</div><ErrorCard msg={error} /></div>;
+  if (!summary) return <div><div className="section-title">Expenses</div><Loading /></div>;
+
+  const { monthlyExpenses, limits, savings } = summary;
+  const p = pct(monthlyExpenses, limits.monthly);
+  const sorted = expenses; // already filtered + sorted by the backend
 
   return (
     <div>
@@ -228,7 +261,7 @@ function Expenses() {
           <div>
             <div style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", color: "#666" }}>Monthly Spend</div>
             <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: "1.55rem", lineHeight: 1.1 }}>
-              ₹{moAmt.toLocaleString()} <span style={{ fontSize: "0.85rem", color: "#888", fontFamily: "inherit" }}>/ ₹{limits.monthly.toLocaleString()}</span>
+              ₹{monthlyExpenses.toLocaleString()} <span style={{ fontSize: "0.85rem", color: "#888", fontFamily: "inherit" }}>/ ₹{limits.monthly.toLocaleString()}</span>
             </div>
           </div>
           <button className="nb-btn sm white" style={{ flexShrink: 0 }} onClick={() => setShowLimits(true)}>⚙ Limits</button>
@@ -239,7 +272,7 @@ function Expenses() {
 
       {/* Savings */}
       <div className="nb-card" style={{ marginBottom: "0.85rem", background: "#E8F8F2" }}>
-        <div style={{ fontWeight: 700, fontSize: "0.7rem", textTransform: "uppercase", marginBottom: 7 }}>💰 Savings · ₹{Number(savings).toLocaleString()}</div>
+        <div style={{ fontWeight: 700, fontSize: "0.7rem", textTransform: "uppercase", marginBottom: 7 }}>💰 Savings · ₹{Number(savings.total).toLocaleString()}</div>
         <div style={{ display: "flex", gap: 8 }}>
           <input className="nb-input" type="number" inputMode="decimal" placeholder="Amount to save" value={savAmt} onChange={e => setSavAmt(e.target.value)} style={{ flex: 1 }} />
           <button className="nb-btn green sm" style={{ flexShrink: 0 }} onClick={addSavings}>+ Save</button>
@@ -322,36 +355,39 @@ function LimitsModal({ limits, onSave, onClose }) {
 // ─── REMINDERS ───────────────────────────────────────────────────────────────
 
 function Reminders() {
-  const [reminders, setReminders] = useState(() => load("pf_reminders", []));
+  const [reminders, setReminders] = useState(null);
+  const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", amount: "", dueDate: todayStr(), repeat: "monthly" });
 
-  function addReminder() {
-    if (!form.name || !form.amount) return;
-    const u = [...reminders, { id: Date.now(), name: form.name, amount: Number(form.amount), dueDate: form.dueDate, repeat: form.repeat, paid: false }];
-    setReminders(u); save("pf_reminders", u);
-    setForm({ name: "", amount: "", dueDate: todayStr(), repeat: "monthly" }); setShowAdd(false);
-  }
-  function markPaid(id) {
-    const u = reminders.map(r => {
-      if (r.id !== id) return r;
-      const nx = new Date(r.dueDate);
-      if (r.repeat === "daily") nx.setDate(nx.getDate() + 1);
-      if (r.repeat === "weekly") nx.setDate(nx.getDate() + 7);
-      if (r.repeat === "monthly") nx.setMonth(nx.getMonth() + 1);
-      if (r.repeat === "yearly") nx.setFullYear(nx.getFullYear() + 1);
-      return { ...r, paid: true, dueDate: nx.toISOString().slice(0, 10), lastPaid: todayStr() };
-    });
-    setReminders(u); save("pf_reminders", u);
-  }
-  function delReminder(id) { const u = reminders.filter(r => r.id !== id); setReminders(u); save("pf_reminders", u); }
+  const refresh = useCallback(() => api.listReminders().then(r => { setReminders(r); setError(""); }), []);
 
-  const today = todayStr();
+  useEffect(() => { refresh().catch(e => setError(e.message)); }, [refresh]);
+
+  async function addReminder() {
+    if (!form.name || !form.amount) return;
+    try {
+      await api.createReminder({ name: form.name, amount: Number(form.amount), dueDate: form.dueDate, repeat: form.repeat });
+      setForm({ name: "", amount: "", dueDate: todayStr(), repeat: "monthly" }); setShowAdd(false);
+      await refresh();
+    } catch (e) { alert(e.message); }
+  }
+  async function markPaid(id) {
+    try { await api.payReminder(id); await refresh(); } catch (e) { alert(e.message); }
+  }
+  async function delReminder(id) {
+    try { await api.deleteReminder(id); await refresh(); } catch (e) { alert(e.message); }
+  }
+
+  if (error) return <div><div className="section-title">Bill Reminders</div><ErrorCard msg={error} /></div>;
+  if (reminders === null) return <div><div className="section-title">Bill Reminders</div><Loading /></div>;
+
+  // Status (overdue / due_today / upcoming / paid) is computed by the backend
   const groups = [
-    { title: "🚨 Overdue", items: reminders.filter(r => !r.paid && r.dueDate < today), accent: "var(--red)" },
-    { title: "🔔 Due Today", items: reminders.filter(r => !r.paid && r.dueDate === today), accent: "var(--orange)" },
-    { title: "📅 Upcoming", items: reminders.filter(r => !r.paid && r.dueDate > today), accent: "var(--blue)" },
-    { title: "✅ Paid (auto-renewing)", items: reminders.filter(r => r.paid), accent: "var(--green)" },
+    { title: "🚨 Overdue", items: reminders.filter(r => r.status === "overdue"), accent: "var(--red)" },
+    { title: "🔔 Due Today", items: reminders.filter(r => r.status === "due_today"), accent: "var(--orange)" },
+    { title: "📅 Upcoming", items: reminders.filter(r => r.status === "upcoming"), accent: "var(--blue)" },
+    { title: "✅ Paid (auto-renewing)", items: reminders.filter(r => r.status === "paid"), accent: "var(--green)" },
   ];
 
   function RCard({ r, accent }) {
@@ -412,7 +448,7 @@ function Reminders() {
 
 // ─── CALCULATOR ──────────────────────────────────────────────────────────────
 
-function Calculator() {
+function Calculator({ onPayFromCalc }) {
   const [display, setDisplay] = useState("0");
   const [stored, setStored] = useState(null);
   const [op, setOp] = useState(null);
@@ -451,6 +487,8 @@ function Calculator() {
   }
 
   const btns = [["AC", "+/-", "%", "÷"], ["7", "8", "9", "×"], ["4", "5", "6", "−"], ["1", "2", "3", "+"], ["0", ".", "⌫", "="]];
+  const payableAmount = Number(display);
+  const canPay = Number.isFinite(payableAmount) && payableAmount > 0;
 
   return (
     <div>
@@ -458,7 +496,7 @@ function Calculator() {
       <div style={{ maxWidth: 340, margin: "0 auto", display: "flex", flexDirection: "column", gap: "0.8rem" }}>
         {/* Display */}
         <div style={{ background: "var(--black)", border: "var(--border)", borderRadius: 4, boxShadow: "var(--shadow)", padding: "0.9rem 0.9rem 0.65rem", textAlign: "right" }}>
-          <div style={{ color: "#888", fontSize: "0.75rem", minHeight: 17, marginBottom: 2 }}>{stored !== null ? `${stored} ${op}` : "\u00A0"}</div>
+          <div style={{ color: "#888", fontSize: "0.75rem", minHeight: 17, marginBottom: 2 }}>{stored !== null ? `${stored} ${op}` : " "}</div>
           <div style={{ color: "var(--yellow)", fontFamily: "'Bebas Neue',sans-serif", fontSize: display.length > 10 ? "1.7rem" : "2.4rem", letterSpacing: 2, wordBreak: "break-all", lineHeight: 1 }}>{display}</div>
         </div>
 
@@ -468,6 +506,15 @@ function Calculator() {
             <button key={ri + "-" + ci} className={cls(b)} onClick={() => handle(b)}>{b}</button>
           )))}
         </div>
+
+        <button
+          className="nb-btn green"
+          style={{ width: "100%", fontSize: "0.95rem", padding: "0.8rem" }}
+          onClick={() => onPayFromCalc(display)}
+          disabled={!canPay}
+        >
+          Pay ₹{payableAmount.toLocaleString()}
+        </button>
 
         {history.length > 0 && (
           <div className="nb-card" style={{ padding: "0.65rem" }}>
@@ -484,32 +531,72 @@ function Calculator() {
 
 // ─── PAYMENT ─────────────────────────────────────────────────────────────────
 
-function Payment() {
+function Payment({ initialAmount = "" }) {
   const [amount, setAmount] = useState("");
-  const [upiId, setUpiId] = useState("");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [step, setStep] = useState("form");
-  const [method, setMethod] = useState("upi");
-  const [txHistory, setTxHistory] = useState(() => load("pf_tx_history", []));
-  const [cardNum, setCardNum] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvv, setCvv] = useState("");
+  const [txHistory, setTxHistory] = useState([]);
+  const [paying, setPaying] = useState(false);
+
+  useEffect(() => {
+    api.listPayments().then(setTxHistory).catch(() => { });
+  }, []);
+
+  useEffect(() => {
+    if (!initialAmount || Number.isNaN(Number(initialAmount)) || Number(initialAmount) <= 0) return;
+    setAmount(String(Number(initialAmount)));
+  }, [initialAmount]);
 
   function handlePay() {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) return;
-    if (method === "upi" && !upiId) return;
-    if (method === "card" && (!cardNum || !expiry || !cvv)) return;
     setStep("confirm");
   }
-  function confirmPay() {
-    const tx = { id: Date.now(), amount: Number(amount), to: method === "upi" ? upiId : "**** " + cardNum.slice(-4), name, note, method, date: new Date().toLocaleString() };
-    const u = [tx, ...txHistory].slice(0, 20); setTxHistory(u); save("pf_tx_history", u);
-    const exps = load("pf_expenses", []);
-    save("pf_expenses", [...exps, { id: Date.now() + 1, amount: Number(amount), category: "Other", note: `Payment to ${name || upiId || "card"}`, date: todayStr() }]);
-    setStep("success");
+  // Opens Razorpay Checkout (test mode). Payment details (card / UPI / bank)
+  // are collected inside Razorpay's secure window — they never touch this app.
+  async function confirmPay() {
+    if (paying) return;
+    setPaying(true);
+    try {
+      const order = await api.createOrder({ amount: Number(amount), recipientName: name, note });
+      await loadRazorpayCheckout();
+      const rzp = new window.Razorpay({
+        key: order.keyId,
+        order_id: order.orderId,
+        amount: order.amountPaise,
+        currency: order.currency,
+        name: "Pocket-Friendly",
+        description: note || (name ? `Payment to ${name}` : "Payment"),
+        prefill: { name: name || "" },
+        theme: { color: "#1a1a1a" },
+        modal: {
+          ondismiss: () => {
+            setPaying(false);
+            api.markPaymentFailed(order.orderId, "Checkout closed before payment").catch(() => { });
+          },
+        },
+        handler: async (resp) => {
+          try {
+            await api.verifyPayment(resp);
+            setTxHistory(await api.listPayments());
+            setStep("success");
+          } catch (e) {
+            alert(`Payment verification failed: ${e.message}`);
+          } finally {
+            setPaying(false);
+          }
+        },
+      });
+      rzp.on("payment.failed", (resp) => {
+        api.markPaymentFailed(order.orderId, resp?.error?.description || "Payment failed").catch(() => { });
+      });
+      rzp.open();
+    } catch (e) {
+      alert(e.message);
+      setPaying(false);
+    }
   }
-  function reset() { setAmount(""); setUpiId(""); setName(""); setNote(""); setCardNum(""); setExpiry(""); setCvv(""); setStep("form"); }
+  function reset() { setAmount(""); setName(""); setNote(""); setStep("form"); }
 
   function TxList() {
     if (!txHistory.length) return null;
@@ -536,7 +623,7 @@ function Payment() {
         <div style={{ fontSize: "3.5rem", marginBottom: "0.5rem" }}>✅</div>
         <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: "1.75rem", color: "var(--green)", marginBottom: 4 }}>Payment Successful!</div>
         <div style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "0.5rem" }}>₹{Number(amount).toLocaleString()}</div>
-        <div style={{ color: "#555", fontSize: "0.82rem", marginBottom: "1.5rem" }}>Paid to {name || upiId || "card"}</div>
+        <div style={{ color: "#555", fontSize: "0.82rem", marginBottom: "1.5rem" }}>Paid to {name || "Razorpay"} · verified ✓</div>
         <button className="nb-btn green" style={{ width: "100%" }} onClick={reset}>Make Another Payment</button>
       </div>
       <TxList />
@@ -549,19 +636,19 @@ function Payment() {
       <div className="nb-card" style={{ marginBottom: "0.9rem", textAlign: "center", padding: "1.5rem 1rem" }}>
         <div style={{ fontSize: "0.72rem", color: "#888", textTransform: "uppercase", fontWeight: 700 }}>You are paying</div>
         <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: "2.6rem", margin: "0.4rem 0", lineHeight: 1 }}>₹{Number(amount).toLocaleString()}</div>
-        <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>To: {name || upiId || "Card ending " + cardNum.slice(-4)}</div>
+        <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>To: {name || "Razorpay Checkout"}</div>
         {note && <div style={{ color: "#666", fontSize: "0.8rem", marginTop: 4 }}>Note: {note}</div>}
         <div style={{ marginTop: 10 }}>
-          <span style={{ background: method === "upi" ? "#FFE600" : "#4169FF", color: method === "upi" ? "#1a1a1a" : "#fff", border: "2px solid var(--black)", borderRadius: 3, padding: "2px 10px", fontSize: "0.68rem", fontWeight: 700 }}>
-            {method === "upi" ? "📱 UPI" : "💳 CARD"}
+          <span style={{ background: "#FFE600", color: "#1a1a1a", border: "2px solid var(--black)", borderRadius: 3, padding: "2px 10px", fontSize: "0.68rem", fontWeight: 700 }}>
+            🛡 RAZORPAY · TEST MODE
           </span>
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <button className="nb-btn green" style={{ width: "100%", fontSize: "1rem", padding: "0.85rem" }} onClick={confirmPay}>🔒 Confirm & Pay</button>
-        <button className="nb-btn white" style={{ width: "100%" }} onClick={() => setStep("form")}>← Go Back</button>
+        <button className="nb-btn green" style={{ width: "100%", fontSize: "1rem", padding: "0.85rem" }} onClick={confirmPay} disabled={paying}>{paying ? "Opening Razorpay…" : "🔒 Pay with Razorpay"}</button>
+        <button className="nb-btn white" style={{ width: "100%" }} onClick={() => setStep("form")} disabled={paying}>← Go Back</button>
       </div>
-      <div style={{ textAlign: "center", marginTop: "0.65rem", fontSize: "0.65rem", color: "#aaa" }}>🔐 Simulated — no real money transferred</div>
+      <div style={{ textAlign: "center", marginTop: "0.65rem", fontSize: "0.65rem", color: "#aaa" }}>🔐 Razorpay Test Mode — no real money is transferred</div>
     </div>
   );
 
@@ -571,25 +658,17 @@ function Payment() {
       <div style={{ background: "var(--yellow)", border: "var(--border)", borderRadius: 4, padding: "0.55rem 0.85rem", marginBottom: "0.85rem", fontSize: "0.76rem", fontWeight: 700, boxShadow: "var(--shadow-sm)" }}>
         Calculate in Calc tab, then pay here!
       </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: "0.85rem" }}>
-        <button className={`nb-btn ${method === "upi" ? "blue" : "white"}`} style={{ flex: 1 }} onClick={() => setMethod("upi")}>📱 UPI</button>
-        <button className={`nb-btn ${method === "card" ? "blue" : "white"}`} style={{ flex: 1 }} onClick={() => setMethod("card")}>💳 Card</button>
+      <div className="nb-card" style={{ marginBottom: "0.85rem", display: "flex", gap: 9, alignItems: "center", padding: "0.6rem 0.85rem" }}>
+        <span style={{ fontSize: "1.2rem" }}>🛡</span>
+        <div style={{ fontSize: "0.74rem", fontWeight: 600, lineHeight: 1.35 }}>
+          Pay securely via <b>Razorpay</b> — UPI / QR · Cards · NetBanking · Wallets
+          <div style={{ fontSize: "0.62rem", color: "#888", fontWeight: 400 }}>Pick your payment method in the Razorpay window (Test Mode)</div>
+        </div>
       </div>
       <div className="nb-card">
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <div><label>Amount (₹) *</label><input className="nb-input" type="number" inputMode="decimal" placeholder="Enter amount" value={amount} onChange={e => setAmount(e.target.value)} /></div>
-          {method === "upi" && <>
-            <div><label>UPI ID *</label><input className="nb-input" type="text" inputMode="email" placeholder="name@upi / phone@paytm" value={upiId} onChange={e => setUpiId(e.target.value)} /></div>
-            <div><label>Recipient Name</label><input className="nb-input" type="text" placeholder="Who are you paying?" value={name} onChange={e => setName(e.target.value)} /></div>
-          </>}
-          {method === "card" && <>
-            <div><label>Card Number *</label><input className="nb-input" type="text" inputMode="numeric" maxLength={16} placeholder="1234 5678 9012 3456" value={cardNum} onChange={e => setCardNum(e.target.value.replace(/\D/g, ""))} /></div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}><label>Expiry *</label><input className="nb-input" type="text" inputMode="numeric" placeholder="MM/YY" maxLength={5} value={expiry} onChange={e => setExpiry(e.target.value)} /></div>
-              <div style={{ flex: 1 }}><label>CVV *</label><input className="nb-input" type="password" inputMode="numeric" placeholder="•••" maxLength={4} value={cvv} onChange={e => setCvv(e.target.value)} /></div>
-            </div>
-            <div><label>Name on Card</label><input className="nb-input" type="text" placeholder="Cardholder name" value={name} onChange={e => setName(e.target.value)} /></div>
-          </>}
+          <div><label>Pay To (optional)</label><input className="nb-input" type="text" placeholder="Who are you paying?" value={name} onChange={e => setName(e.target.value)} /></div>
           <div><label>Note (optional)</label><input className="nb-input" type="text" placeholder="What's this for?" value={note} onChange={e => setNote(e.target.value)} /></div>
           <button className="nb-btn blue" style={{ width: "100%", fontSize: "1rem", padding: "0.85rem", marginTop: 4 }} onClick={handlePay}>🔒 Proceed to Pay</button>
         </div>
